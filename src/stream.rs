@@ -58,7 +58,10 @@ impl StreamTracker {
         let pos = self.streams.iter().position(|&s| s == stream);
         match pos {
             Some(idx) => { self.streams[idx].packet_count += 1; },
-            None => { self.streams.push(stream); }
+            None => { 
+                self.streams.push(stream);
+                return Some::<usize>(self.streams.len())
+            }
         }
         pos
     }
