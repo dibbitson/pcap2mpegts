@@ -1,5 +1,8 @@
 
-use std::fmt;
+use std::{fmt, io::BufWriter};
+use std::fs::File;
+use std::io::Write;
+use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone)]
 pub struct UdpStream {
@@ -45,25 +48,49 @@ impl UdpStream {
 #[derive(Debug)]
 pub struct StreamTracker {
     streams: Vec<UdpStream>,
+    ts_base_filename: String,
+    ts_files: HashMap<usize,BufWriter<File>>
 }
 
 impl StreamTracker {
-    pub fn new() -> StreamTracker {
+    pub fn new(filename: String) -> StreamTracker {
         StreamTracker {
             streams: vec!(),
+            ts_base_filename: filename,
+            ts_files: HashMap::new()
         }
     }
 
-    pub fn update(&mut self, stream: UdpStream) -> Option<usize> {
+    pub fn dump_payload(&mut self, index: usize, data: &[u8]) {
+
+        // Make sure BufWriter exists first for this index
+        if !self.ts_files.contains_key(&index) {
+            let filename = format!("{}_s{}{}", self.ts_base_filename, index, ".ts");
+            let outbuf = BufWriter::new(File::create(filename).unwrap());
+            self.ts_files.insert(index,outbuf);
+
+        }
+
+        let writer = self.ts_files.get_mut(&index);
+        let _ = match writer {
+            Some(buf) => buf.write(data),
+            None => todo!()
+       //     _ => Ok(&0)
+        };
+    }
+
+    pub fn track(&mut self, stream: UdpStream) -> usize {
         let pos = self.streams.iter().position(|&s| s == stream);
         match pos {
-            Some(idx) => { self.streams[idx].packet_count += 1; },
+            Some(idx) => { 
+                self.streams[idx].packet_count += 1;
+                return idx;
+            },
             None => { 
                 self.streams.push(stream);
-                return Some::<usize>(self.streams.len())
+                return self.streams.len()-1
             }
         }
-        pos
     }
 }
 

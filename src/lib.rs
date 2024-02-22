@@ -5,7 +5,7 @@ use pcap_parser::*;
 use pcap_parser::traits::PcapReaderIterator;
 
 use pcap_parser::data::{get_packetdata_ethernet, get_packetdata_ipv4, PacketData};
-use etherparse::{SlicedPacket,InternetSlice,TransportSlice,IpNumber};
+use etherparse::{InternetSlice, IpNumber, SlicedPacket, TransportSlice, UdpSlice};
 
 use std::io::*;
 use std::fs::File;
@@ -21,8 +21,7 @@ pub mod config;
 pub struct Converter {
     config: config::Config,
     streams: StreamTracker,
-
-    ts_file: BufWriter<File>,
+    ts_file: Option<BufWriter<File>>
 }
 
 impl Converter {
@@ -32,63 +31,68 @@ impl Converter {
         // Basic sync for sync byte at the beginning of every packet
         data[0] == 0x47
     }
-    
+
+    fn on_udp(&mut self, header: etherparse::Ipv4HeaderSlice, udp: UdpSlice) -> bool
+    {
+        if self.check_mpegts(udp.payload()) {
+               
+            // Build stream object here. This represents the current
+            // packets source and destination, is what identifies
+            // the current udp stream.
+            let stream = UdpStream::new(
+                header.source(), 
+                udp.source_port(), 
+                header.destination(), 
+                udp.destination_port());
+
+            //   println!("{:?}", stream);
+            // Update the current stream and grab it's index
+            let index = self.streams.track(stream);
+
+            // do nothing if we are querying only
+            if self.config.query {
+                return true;
+            }
+
+            // If we are dumping all streams
+            if self.config.all {
+                self.streams.dump_payload(index, udp.payload());
+            }
+            else {
+                // Otherwise just the specified or default stram
+                if self.config.stream.is_some_and(|s| s == index) {
+                    self.streams.dump_payload(index, udp.payload());
+                }
+            }
+        }
+        else {
+            return false;
+        }
+        return true;
+    }
+
     fn on_ipv4<'a>(&mut self, value: SlicedPacket<'a>)
     {
-        let mut is_udp : bool = false;
-        let mut src_addr : [u8; 4] = [0; 4];
-        let mut dst_addr : [u8; 4] = [0; 4];
- 
         // println!("link: {:?}", value.link);
         // println!("vlan: {:?}", value.vlan);
         //     println!("transport: {:?}", value.transport);
 
         match value.net {
             Some(InternetSlice::Ipv4(ref _ipv4)) => {
-                let header = _ipv4.header();
+                let ipv4_header = _ipv4.header();
                 //println!("src: {:?} dst: {:?}", header.source(), header.destination());
-                if header.protocol() == IpNumber::UDP {
-                    is_udp = true;
-                    src_addr = header.source();
-                    dst_addr = header.destination();
+                if ipv4_header.protocol() == IpNumber::UDP {
+                    match value.transport {
+                        Some(TransportSlice::Udp(udp)) => {
+                            //println!("sport: {} dport: {}", _udp.source_port(), _udp.destination_port());
+                            
+                            self.on_udp(ipv4_header, udp);
+                        },
+                        _ => ()
+                    }
                 }
             },
             _ => ()
-        }
-        if is_udp {
-            match value.transport {
-                Some(TransportSlice::Udp(_udp)) => {
-                    //println!("sport: {} dport: {}", _udp.source_port(), _udp.destination_port());
-                    if self.check_mpegts(_udp.payload()) {
-               
-                        // Build stream object here. This represents the current
-                        // packets source and destination, is what identifies
-                        // the current udp stream.
-                        let stream = UdpStream::new(src_addr, _udp.source_port(), dst_addr, _udp.destination_port());
-
-                        // Now that we have an identifier, we use it to
-                    //   println!("{:?}", stream);
-                        // contains and update don't need to reference stream.
-
-                        let index = self.streams.update(stream);
-
-                        // do nothing if we are querying only
-                        if self.config.query {
-                            return ()
-                        }
-
-                        match index {
-                            Some(idx) => {
-                                if self.config.stream.is_some_and(|x| x == idx) {
-                                    let _ = self.ts_file.write(_udp.payload());
-                                }
-                            }
-                            None => ()
-                        }
-                    }
-                },
-                _ => ()
-            }
         }
     }
 
@@ -164,15 +168,32 @@ impl Converter {
 
     pub fn run(_config: config::Config) -> Result<(), Box<dyn Error>>
     {
-        let mut converter = Converter{ 
-            config: _config.clone(),
-            streams: StreamTracker::new(), 
-            ts_file: BufWriter::new(File::create(_config.output)?)
+        let input_path = Path::new(&_config.input);
+
+        // If an output file is supplied, use that, otherwise derive
+        // it from the input filename.
+        let file_basename = match _config.output {
+            Some(ref s) =>  s.clone(),
+            None => {
+                let file_stem = match input_path.file_stem() {
+                    Some(stem) => {
+                        stem.to_str().unwrap()
+                    },
+                    None => {
+                        return Err(std::io::Error::other("Invalid input file. Could not derive output file").into());
+                    }
+                };
+                file_stem.to_string()
+            }
         };
 
-        println!("Opening file {}", _config.input);
-    
-        let file = File::open(Path::new(&_config.input))?;
+        let mut converter = Converter{ 
+            config: _config.clone(),
+            streams: StreamTracker::new(file_basename), 
+            ts_file: None,
+        };
+
+        let file = File::open(input_path)?;
         let mut linktype = Linktype::NULL;
          
         let mut reader = LegacyPcapReader::new(65536, file)?;
@@ -204,7 +225,7 @@ impl Converter {
             }
         }
     
-        converter.ts_file.flush()?;
+        let _ = converter.ts_file.is_some_and(|mut f| f.flush().is_ok());
         
         println!("Streams found:\n{}", converter.streams);
     
