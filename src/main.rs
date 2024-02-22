@@ -6,7 +6,8 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error>>
 {
     let config = match pcap2mpegts::config::Config::build() {
-        Err(_e) => {
+        Err(e) => {
+            println!("Configuration error: {e}");
             process::exit(1);
         }
         Ok(s) => { s }
