@@ -56,12 +56,12 @@ impl Converter {
 
             // If we are dumping all streams
             if self.config.all {
-                self.streams.dump_payload(index, udp.payload());
+                let _ = self.streams.dump_payload(index, udp.payload());
             }
             else {
                 // Otherwise just the specified or default stram
                 if self.config.stream.is_some_and(|s| s == index) {
-                    self.streams.dump_payload(index, udp.payload());
+                    let _ = self.streams.dump_payload(index, udp.payload());
                 }
             }
         }

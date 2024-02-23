@@ -1,7 +1,7 @@
 
 use std::{fmt, io::BufWriter};
 use std::fs::File;
-use std::io::Write;
+use std::io::{Error, Write};
 use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone)]
@@ -61,22 +61,25 @@ impl StreamTracker {
         }
     }
 
-    pub fn dump_payload(&mut self, index: usize, data: &[u8]) {
+    pub fn dump_payload(&mut self, index: usize, data: &[u8]) -> Result<(), Error> {
 
         // Make sure BufWriter exists first for this index
         if !self.ts_files.contains_key(&index) {
             let filename = format!("{}_s{}{}", self.ts_base_filename, index, ".ts");
-            let outbuf = BufWriter::new(File::create(filename).unwrap());
+            let outbuf = BufWriter::new(File::create(filename)?);
             self.ts_files.insert(index,outbuf);
 
         }
 
         let writer = self.ts_files.get_mut(&index);
         let _ = match writer {
-            Some(buf) => buf.write(data),
-            None => todo!()
-       //     _ => Ok(&0)
+            Some(buf) => buf.write(data)?,
+            None =>  {
+                println!("No writer available!");
+                return Ok(());
+            }
         };
+        Ok(())
     }
 
     pub fn track(&mut self, stream: UdpStream) -> usize {
