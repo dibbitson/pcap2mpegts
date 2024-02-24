@@ -1,10 +1,12 @@
 # pcap2mpegts
 
-pcap2mpegts is a simple CLI tool for extracting MpegTS data from a .pcap file. It only cares about MpegTS delivered over UDP and will ignore everything else.
+`pcap2mpegts` is a simple CLI tool for extracting `MpegTS` data from a `.pcap`
+file. It only cares about `MpegTS` delivered over UDP and will ignore everything
+else.
 
 It exists because traditional methods using WireShark can be quite slow.
 
-One way to generate a .pcap file that is compatible with this tool is:
+One way to generate a `.pcap` file that is compatible with this tool is:
 
 ```
 sudo tcpdump -p -i any port <port> -w output.pcap -C 400 -K -n
@@ -25,9 +27,10 @@ Options:
   -V, --version          Print version
 ```
 
-Only one of --query, --all, and --stream can be accepted. --output is optional. If not
-suppplied it will use the input filename as a base for the generated output files.
-You can run --query to only print out all the available streams, and not write out a file.
-You can run --stream with an index (gathered from --query) to dump out that stream to OUTPUT.
-If not --stream is specified, the tool will dump the first stream found.
-Finally, --all with dump all found streams.
+Only one of `--query`, `--all`, and `--stream` can be accepted. `--output` is
+optional. If not supplied it will use the input filename as a base for the
+generated output files. You can run `--query` to only print out all the
+available streams, and not write out a file. You can run `--stream` with an
+index (gathered from `--query`) to dump out that stream to `OUTPUT`. If not
+`--stream` is specified, the tool will dump the first stream found. Finally,
+`--all` with dump all found streams.
