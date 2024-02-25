@@ -69,8 +69,7 @@ impl Config {
 
         let input = match args.get_one::<String>("input") {
             None => {
-                let _ = cmd.print_help();
-                return Err(cmd.error(ErrorKind::MissingRequiredArgument, "No input").into());
+                return Err(cmd.error(ErrorKind::MissingRequiredArgument, "No input provided.").into());
             }
             Some(s) => s
         };

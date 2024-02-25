@@ -1,22 +1,18 @@
 
 
 use std::process;
-use std::error::Error;
+use pcap2mpegts::{config::Config,Converter};
 
-fn main() -> Result<(), Box<dyn Error>>
+fn run() -> i32
 {
-    let config = match pcap2mpegts::config::Config::build() {
-        Err(e) => {
-            println!("Configuration error: {e}");
-            process::exit(1);
-        }
-        Ok(s) => { s }
-    };
-    
-    if let Err(e) = pcap2mpegts::Converter::run(config) {
-        println!("Application error: {e}");
-        process::exit(1);
+    if let Err(e) = Config::build().and_then(Converter::run) {
+        println!("{e}");
+        return 1;
     }
- 
-    Ok(())
+    0
+}
+
+fn main()
+{    
+    process::exit(run());
 }
